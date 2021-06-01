@@ -14,13 +14,8 @@ gitlab_token=$(rg $mvnrc -Noe '<value>(.*)</value>' -r '$1')
 container_registry_group_ids=("1364" "661")
 
 
-if [[ "$__enterprise" == "nasdaq" ]]; then
-  __fqdn="git.nasdaq.com"
-else
-  __fqdn="gitlab.com"
-fi
+__fqdn="gitlab.com"
 
-# You shouldn't need to edit anything past here unless there's a bug.
 
 # see API docs:
 # https://docs.gitlab.com/ee/api/container_registry.html
@@ -57,7 +52,6 @@ update_repo_data() {
 }
 
 get_repo_data() {
-  update_outdated_repo_data
   cat "$json_file"
 }
 
@@ -89,6 +83,7 @@ tag_data() {
   local partial_path="$1"
   local tag_name="$2"
 
+  update_outdated_repo_data
   local json=$(get_repo_data)
   local filtered_repo_data=$(echo "$json" | jq --arg name "$partial_path" '.[] | select (.location|test($name))')
 

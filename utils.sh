@@ -2,37 +2,12 @@
 
 #--------------------------------------BUILTIN------------------------------------------------------
 alias bashrc='vim ~/.bashrc; . ~/.bashrc'
+alias profilerc='vim ~/.bash_profile; . ~/.bash_profile'
 #did you know aliases can use other aliases? watch out for that
 #make aliases work with sudo
 alias sudo='sudo '
 #use sudo -i to become root and keep your bashrc & vimrc
 alias -- -i='-E bash --rcfile $HOME/.bashrc'
-
-if [[ "$__enterprise" != "nasdaq" ]]; then #nasdaq doesn't do X11 b/c we're lame.
-    alias ssh='ssh -XY' #allows X11 forwarding, which I use for clipboards. now copy-paste might actually work.
-fi
-
-# auto completion for ssh and scp
-_complete_ssh_hosts ()
-{
-        COMPREPLY=()
-        cur="${COMP_WORDS[COMP_CWORD]}"
-        comp_ssh_hosts=`cat ~/.ssh/known_hosts | \
-                        cut -f 1 -d ' ' | \
-                        sed -e 's/,.*//g' | \
-                        grep -v ^# | \
-                        uniq | \
-                        grep -v "\[" ;
-                cat ~/.ssh/config | \
-                        grep "^Host " | \
-                        awk '{print $2}'
-                `
-        COMPREPLY=( $(compgen -W "${comp_ssh_hosts}" -- $cur))
-        return 0
-}
-complete -F _complete_ssh_hosts ssh
-complete -F _complete_ssh_hosts ssh-copy-id
-complete -F _complete_ssh_hosts share
 
 #--auto sudo-
 alias apt-get='sudo apt-get'
@@ -100,7 +75,7 @@ alias fr.='find . -regextype grep -regex'
 findsed() {  # $1. search value. $2. replacement value. stdin (optional): list of files.
   # if stdin is the terminal, then we didn't pipe anything
   if [[ -t 0 ]]; then
-    find . -type f -not -path "*.git*" -exec sed -i -e "s:$1:$2:g" {} \+;
+    find . -type f -not -path "*.git*" -exec sed -i -e "s>$1>$2>g" {} \+;
   else
     xargs sed -i -e "s:$1:$2:g"
   fi
@@ -111,6 +86,26 @@ alias tr33='tree -a -C -I ".git|.vim|.idea|.DS_Store|*cache*" -L 3'
 alias tree='tree -a -C -I ".git|.vim|.idea|.DS_Store|*cache*"'
 
 #--utils--
+export et="TZ=\"America/New_York\""
+export utc="TZ=\"Etc/UTC\""
+export mt="TZ=\"America/Denver\""
+alias et="TZ=\"America/New_York\""
+alias utc="TZ=\"Etc/UTC\""
+alias mt="TZ=\"America/Denver\""
+alias at="TZ=\"Australia/Sydney\""
+fromet() {  # $1 Military time in ET
+  date -d "$et $1 today" +"%H%M %Z"
+}
+frommt() {  # $1 Military time in MT
+  date -d "$mt $1 today" +"%H%M %Z"
+}
+fromutc() {  # $1 Military time in UTC
+  date -d "$utc $1 today" +"%H%M %Z"
+}
+fromat() {  # $1 Military time in Australia
+  date -d "$at $1 20220405" +"%y%m%d %H%M %Z"
+}
+
 hrbytes() {  # human readable bytes. numfmt is cool.
   local num;
   if [[ $# -lt 1 ]]; then
@@ -118,28 +113,114 @@ hrbytes() {  # human readable bytes. numfmt is cool.
   else
     num="$1"
   fi
-  numfmt --to=iec-i --suffix=B --format="%.3f" "$num"
+  local from
+  if [[ "$num" =~ [KMGTPEZY]i$ ]]; then
+    from="--from=iec-i"
+  elif [[ "$num" =~ [KMGTPEZY]$ ]]; then
+    from="--from=si"
+  fi
+  # purposefully not quoting from to avoid empty string issues
+  numfmt --to=iec-i --suffix=B --format="%.3f" $from "${num//,}"
 }
 alias hrb='hrbytes'
 es() {  # epoch seconds
   date +%s
 }
-hres() {  # human readable epoch seconds
-    local T=$1
-    if [[ "$T" == "ms" ]]; then #ms since epoch
-        T=$2
-        date -d @$((T/1000))
-    else
-        date -d @$1
-    fi
+ems() {  # epoch ms
+  date +%s%3N
 }
-hrs() {  # human readable seconds. -h
-    local D T=$1
-    ((D=T/60/60/24)) && printf '%d days ' $D
-    printf '%d:%d:%d\n' $((T/60/60%24)) $((T/60%60)) $((T%60))
+hres() {  # human readable epoch seconds
+  local d
+  if [[ $# -lt 1 ]]; then
+    read d;
+  else
+    d="$1"
+  fi
+  date -d @$d
+}
+hrems() {  # human readable epoch milliseconds
+  local T
+  if [[ $# -lt 1 ]]; then
+    read T;
+  else
+    T="$1"
+  fi
+  date -d @$((T/1000))
+}
+hrs() {  # human readable seconds.
+  local D T
+  if [[ $# -lt 1 ]]; then
+    read T;
+  else
+    T="$1"
+  fi
+  ((D=T/60/60/24)) && printf '%d days ' $D
+  printf '%d:%d:%d\n' $((T/60/60%24)) $((T/60%60)) $((T%60))
+}
+hrms() {  # human readable seconds.
+  local ms s
+  if [[ $# -lt 1 ]]; then
+    read ms;
+  else
+    ms="$1"
+  fi
+  s=$(( ms / 1000 ))
+  hrs $s
+}
+hrnum() {  # human readable numbers (commas and SI format)
+  # can read from files via pipe and from args
+  # -c : comma format only (1234 -> 1,234)
+  # -s : scientific notation (1234 -> 1.3K)
+  # -b (default): both formats (1234 -> 1,234 aka 1.3K)
+  local format=b
+  local nums=''
+  if [[ $# -gt 0 ]]; then
+    for arg in "$@"; do
+      if [[ $arg =~ ^-[a-z]$ ]]; then
+        format=${arg##?}
+      elif [[ $arg =~ ^[0-9.]+$ ]]; then
+        nums+="$arg"$'\n'
+      else
+        echo "Dunno how to parse $arg, can only accept [0-9.]+, -c / -s / -b"
+        return 1
+      fi
+    done
+  fi
+  if [[ -n "$nums" ]]; then
+    # herestring would add another trailing newline
+    echo -n "$nums" | hrnum -$format
+  else
+    while read -r num || [[ -n "$num" ]]; do
+      if [[ $format == "b" ]]; then
+        printf "%'.f aka " "$num"
+        numfmt --to=si --format="%.1f" "$num"
+      elif [[ $format == "s" ]]; then
+        numfmt --to=si --format="%.1f" "$num"
+      elif [[ $format == "c" ]]; then
+        printf "%'f\n" "$num"
+      fi
+    done
+  fi
 }
 bd() {  # bash floating point division
-  echo "result = $@ ; scale=4; result / 1" | bc -l
+  # deletes comma and underscore separators
+  echo "result = $(echo "$@" |tr -d ',_' | sed -e 's/[Ee]/*10^/g') ; scale=4; result / 1" | bc -l
+}
+sum() {
+  if [[ $# -lt 1 ]]; then
+    awk '{for(i=1;i<=NF;i++) sum+=$i}END{print sum}'
+  else
+    awk '{for(i=1;i<=NF;i++) sum+=$i}END{print sum}' <<< "$@"
+  fi
+}
+average() {
+  if [[ $# -lt 1 ]]; then
+    # nested if prevents for loop from triggering and incrementing n on empty lines
+    awk '{for(i=1;i<=NF;i++) {if (i<=NF) sum+=$i; n++ }} END {print sum / n}'
+  else
+    # nested if prevents for loop from triggering and incrementing n on empty lines
+    awk '{for(i=1;i<=NF;i++) {if (i<=NF) sum+=$i; n++ }} END {print sum / n}' <<< "$@"
+  fi
 }
 baseconvert() {  # convert between bases
   if [[ $# -lt 3 ]]; then
@@ -261,4 +342,15 @@ mkcd() {
 }
 cdl() {
   cd $1 && ls
+}
+fix10() {  # calculate fix checksum from a message delimited by |
+  local msg
+  if [[ $# -lt 1 ]]; then
+    read msg;
+  else
+    msg="$1"
+  fi
+  echo "$msg" | \
+    sed -e 's/10=[0-9]\{3\}|\?$//' | \
+    awk 'BEGIN{FS="";for(n=0;n<256;n++)ord[sprintf("%c",n)]=n;ord["|"]=1}{for(i=1;i<=NF;i++) a+=ord[$(i)]}END{print a%256}'
 }

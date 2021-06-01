@@ -9,8 +9,11 @@
 # there's there's a TUI, infinite is unwieldy.
 __maxhist=40
 
-__cdfile="$PWD/pd_store/recent_dirs"
-__vimfile="$PWD/pd_store/recent_files"
+__cdfile="$PWD/pd_store/recent_dirs.txt"
+__tempcdfile="$PWD/pd_store/temp_dirs.txt"
+__vimfile="$PWD/pd_store/recent_files.txt"
+
+touch $__cdfile $__tempcdfile $__vimfile
 
 #we use printf because we're adults now.
 [[ ! -f "$__cdfile" ]] && printf "%s%b" "$HOME" "\t" >> "$__cdfile"
@@ -23,6 +26,7 @@ alias vdh='vim $__vimfile'
 
 #--------------------------------------PD-----------------------------------------------------------
 __pdrc="$PWD/pd.sh"
+# shellcheck disable=SC2139
 alias pdrc="vim $__pdrc; . $__pdrc"
 
 
@@ -59,8 +63,6 @@ pd() {
     local nickname
     local num
     nickname=$2
-    local tempfile
-    tempfile="$bashfiles/temp_dirs"
     if [[ $# -ge 1 ]]; then
         choice="$1"
         if [[ "$choice" == "-" ]]; then
@@ -108,8 +110,8 @@ pd() {
         if [[ -d "$dest" && ! $(grep "$__cdfile" -e "^$dest	") ]]; then
             #if it's a real place but we've never seen it
             #first, add to file
-            printf "$dest\t$nickname\n" > "$tempfile"
-            cat "$__cdfile" >> "$tempfile"
+            printf "$dest\t$nickname\n" > "$__tempcdfile"
+            cat "$__cdfile" >> "$__tempcdfile"
             #delete from file until under the line cap
             local linecount
             linecount=$(wc -l < "$__cdfile")
@@ -117,10 +119,10 @@ pd() {
                 (( linecount -= __maxhist ))
                 #we delete with truncation:
                 #https://stackoverflow.com/a/48717431/5889131 
-                truncate -s -$(tail -$linecount "$tempfile" | wc -c) "$tempfile"
+                truncate -s -$(tail -$linecount "$__tempcdfile" | wc -c) "$__tempcdfile"
             fi
             #then move
-            mv "$tempfile" "$__cdfile"
+            mv "$__tempcdfile" "$__cdfile"
             cd "$choice"
             return
         elif [[ -z "$dest" ]]; then
@@ -135,6 +137,10 @@ pd() {
             dest=$(echo "$dest" | tail -n 1 | cut -f1) #default delimiter is \t
             #if we still don't have a destination, sudoku
             [[ -z "$dest" ]] && return 1
+        fi
+        if [[ -f "$dest" ]]; then
+            echo "$dest is not a directory"
+            return 1
         fi
         #else: it is a real place and we've seen it, so $dest is valid either way:
         #the regex matches all lines that contain it.
@@ -209,7 +215,7 @@ vd() {
         return
     fi
     #if the choice is not a number in our file
-    if [[ ! "$choice" =~ ^[0-9]+$ ]] || (( $choice >= $num )); then
+    if [[ ! "$choice" =~ ^[0-9]+$ ]] || (( choice >= num )); then
         #make sure $choice isn't in ~ form
         choice=$(expandtilde "$choice")
         #expand choice from ../relative ./path form:
@@ -219,7 +225,9 @@ vd() {
             target=$(readlink -e "$choice")
         fi
         #if we found a directory, ignore it
-        if [[ -d "$target" ]]; then target= ; fi
+        if [[ -d "$target" ]]; then
+            target=
+        fi
         #this won't work if you have tabs/newlines in your directory/file-names
         #you deserve it to fail if that's true. jesus.
         echo "$target"

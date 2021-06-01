@@ -15,22 +15,11 @@
 # dscratch: 'drunsh' with alpine:latest instead of your image
 
 
-# change or add elifs for other private registries
-if [[ "$__enterprise" == "nasdaq" ]]; then
-  __hub="registry.git.nasdaq.com"
-else
-  unset __hub
-fi
-
 
 
 #--------------------------------------DOCKER-------------------------------------------------------
 __dockerc="$HOME/.docker/config.json"
 alias dockerc='vim $__dockerc'
-
-if [[ -n "$__hub" ]] && [[ "$__hub" =~ [^/]$ ]]; then
-  __hub+=/
-fi
 
 if [[ -z "$dimage" ]]; then
     export dimage='test'
@@ -43,26 +32,38 @@ if [[ -z "$dproj" ]]; then
 fi
 
 dcon() {
-  echo "Currently set to build/run/push $__hub/$dproj/$dimage:$dtag"
-  read -e -i "$dimage" -p "Image name: " dimage
-  read -e -i "$dtag" -p "Tag name: " dtag
-  read -e -i "$dproj" -p "Project name: ($__hub/) " dproj
+  if [[ $# -gt 0 ]]; then
+    local input="$1"
+    dtag=${input##*:}
+    input=${input%:*}
+    dimage=${input##*/}
+    if [[ "$input" =~ ^"$__hub" ]]; then
+      input=${input##$__hub/}
+    fi
+    dproj=${input%/*}
+  else
+    read -e -i "$dimage" -p "Image name: " dimage
+    read -e -i "$dtag" -p "Tag name: " dtag
+    read -e -i "$dproj" -p "Project name (in $__hub): " dproj
+  fi
+  echo "Set to build/run/push ${__hub+$__hub/}$dproj/$dimage:$dtag"
 }
 
 alias dbuildp='echo "building $dimage:$dtag with proxies"; docker build . \
   --build-arg http_proxy=$http_proxy --build-arg https_proxy=$http_proxy \
   --build-arg HTTP_PROXY=$http_proxy --build-arg HTTPS_PROXY=$http_proxy \
   --build-arg no_proxy="$no_proxy" --build-arg NO_PROXY="$no_proxy" -t $dimage:$dtag'
-alias dbuild='echo "building $dimage:$dtag"; docker build . -t $dimage:$dtag'
-alias dpush='echo "pushing $__hub/$dproj/$dimage:$dtag"; \
-    docker tag $dimage:$dtag $__hub/$dproj/$dimage:$dtag; \
-    docker push $__hub/$dproj/$dimage:$dtag'
+alias dbuild='echo "building $dimage:$dtag"; docker build . -t $dimage:$dtag --platform linux/x86_64'
+alias dpush='echo "pushing ${__hub+$__hub/}$dproj/$dimage:$dtag"; \
+    docker tag $dimage:$dtag ${__hub+$__hub/}$dproj/$dimage:$dtag; \
+    docker push ${__hub+$__hub/}$dproj/$dimage:$dtag'
 alias dpull='echo "pulling $__hub/$dproj/$dimage:$dtag or $dimage:$dtag"; \
-    docker pull $__hub/$dproj/$dimage:$dtag || docker pull $dimage:$dtag'
+    { docker pull $__hub/$dproj/$dimage:$dtag && \
+      docker tag $__hub/$dproj/$dimage:$dtag $dimage:$dtag; } || docker pull $dimage:$dtag'
 drun() {  # runs the docker image in stdout
   if [[ $# -gt 0 ]]; then
     echo "running $@"
-    docker run -it --rm --name test "$@"
+    docker run -it --rm --name test "$@" --platform linux/x86_64
   else
     echo "running $dimage:$dtag"
     docker run -it --rm --name test $dimage:$dtag
@@ -71,10 +72,19 @@ drun() {  # runs the docker image in stdout
 drunsh() {
   if [[ $# -gt 0 ]]; then
     echo "running $@"
-    docker run -it --rm --entrypoint /bin/sh --name test "$@"
+    docker run -it --rm --entrypoint /bin/sh --platform linux/x86_64 --name test "$@"
   else
     echo "running $dimage:$dtag"
-    docker run -it --rm --entrypoint /bin/sh --name test $dimage:$dtag
+    docker run -it --rm --entrypoint /bin/sh --platform linux/x86_64 --name test $dimage:$dtag
+  fi
+}
+drunarmsh() {
+  if [[ $# -gt 0 ]]; then
+    echo "running $@"
+    docker run -it --rm --entrypoint /bin/sh --platform linux/arm64 --name test "$@"
+  else
+    echo "running $dimage:$dtag"
+    docker run -it --rm --entrypoint /bin/sh --platform linux/arm64 --name test $dimage:$dtag
   fi
 }
 alias dexec='docker exec -it test /bin/sh'
@@ -117,4 +127,5 @@ dockerstop() {
 
 alias dockerclean='docker rm $(docker ps -aq)'
 alias dockerls='docker ps'
+alias dlogin='docker login $__hub'
 
