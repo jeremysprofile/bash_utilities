@@ -12,15 +12,16 @@ gitlab_token=$(rg $mvnrc -Noe '<value>(.*)</value>' -r '$1')
 # Set the group ids to be all the group IDs you will ever look at containers for.
 # For instance, I care about TradeGuard and DCASS.
 container_registry_group_ids=("1364" "661")
+__enterprise="nasdaq"
 
 
+# You shouldn't need to edit anything past here unless there's a bug.
 if [[ "$__enterprise" == "nasdaq" ]]; then
   __fqdn="git.nasdaq.com"
 else
   __fqdn="gitlab.com"
 fi
 
-# You shouldn't need to edit anything past here unless there's a bug.
 
 # see API docs:
 # https://docs.gitlab.com/ee/api/container_registry.html
@@ -57,7 +58,6 @@ update_repo_data() {
 }
 
 get_repo_data() {
-  update_outdated_repo_data
   cat "$json_file"
 }
 
@@ -89,6 +89,7 @@ tag_data() {
   local partial_path="$1"
   local tag_name="$2"
 
+  update_outdated_repo_data
   local json=$(get_repo_data)
   local filtered_repo_data=$(echo "$json" | jq --arg name "$partial_path" '.[] | select (.location|test($name))')
 

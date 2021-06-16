@@ -124,6 +124,9 @@ alias hrb='hrbytes'
 es() {  # epoch seconds
   date +%s
 }
+ems() {  # epoch ms
+  date +%s%3N
+}
 hres() {  # human readable epoch seconds
     local T=$1
     if [[ "$T" == "ms" ]]; then #ms since epoch
@@ -137,6 +140,16 @@ hrs() {  # human readable seconds. -h
     local D T=$1
     ((D=T/60/60/24)) && printf '%d days ' $D
     printf '%d:%d:%d\n' $((T/60/60%24)) $((T/60%60)) $((T%60))
+}
+hrnum() {  # human readable numbers (just adds commas)
+  local num;
+  if [[ $# -lt 1 ]]; then
+    read num;
+  else
+    num="$1"
+  fi
+  printf "%'.f aka " "$num"
+  numfmt --to=si --format="%.1f" "$num"
 }
 bd() {  # bash floating point division
   echo "result = $@ ; scale=4; result / 1" | bc -l
