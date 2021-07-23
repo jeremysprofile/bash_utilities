@@ -128,20 +128,18 @@ ems() {  # epoch ms
   date +%s%3N
 }
 hres() {  # human readable epoch seconds
-    local T=$1
-    if [[ "$T" == "ms" ]]; then #ms since epoch
-        T=$2
-        date -d @$((T/1000))
-    else
-        date -d @$1
-    fi
+  date -d @$1
+}
+hrems() {  # human readable epoch milliseconds
+  local T=$1
+  date -d @$((T/1000))
 }
 hrs() {  # human readable seconds. -h
     local D T=$1
     ((D=T/60/60/24)) && printf '%d days ' $D
     printf '%d:%d:%d\n' $((T/60/60%24)) $((T/60%60)) $((T%60))
 }
-hrnum() {  # human readable numbers (just adds commas)
+hrnum() {  # human readable numbers (commas and SI format)
   local num;
   if [[ $# -lt 1 ]]; then
     read num;
