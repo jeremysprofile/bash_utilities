@@ -134,10 +134,14 @@ hrems() {  # human readable epoch milliseconds
   local T=$1
   date -d @$((T/1000))
 }
-hrs() {  # human readable seconds. -h
+hrs() {  # human readable seconds.
     local D T=$1
     ((D=T/60/60/24)) && printf '%d days ' $D
     printf '%d:%d:%d\n' $((T/60/60%24)) $((T/60%60)) $((T%60))
+}
+hrms() {  # human readable seconds.
+  local s=$(( $1 / 1000 ))
+  hrs $s
 }
 hrnum() {  # human readable numbers (commas and SI format)
   local num;
@@ -151,6 +155,13 @@ hrnum() {  # human readable numbers (commas and SI format)
 }
 bd() {  # bash floating point division
   echo "result = $@ ; scale=4; result / 1" | bc -l
+}
+sum() {
+  if [[ $# -lt 1 ]]; then
+    awk '{for(i=1;i<=NF;i++) sum+=$i}END{print sum}'
+  else
+    awk '{for(i=1;i<=NF;i++) sum+=$i}END{print sum}' <<< "$@"
+  fi
 }
 baseconvert() {  # convert between bases
   if [[ $# -lt 3 ]]; then
