@@ -263,8 +263,10 @@ numcols() {  # display numbers next to column names (one per line) for file or p
   # 2: delimiter (defaults to ',')
   if [[ -s "$1" ]]; then
     head $1 -n 1 | sed "s/${2:-,}/\n/g" | awk '{printf("%d %s\n", NR-1, $0)}'
-  else
+  elif (( $# > 0 )); then
     head -n $1 | sed "s/${1:-,}/\n/g" | awk '{printf("%d %s\n", NR-1, $0)}'
+  else
+    head | sed "s/${1:-,}/\n/g" | awk '{printf("%d %s\n", NR-1, $0)}'
   fi
 }
 
@@ -353,4 +355,26 @@ fix10() {  # calculate fix checksum from a message delimited by |
   echo "$msg" | \
     sed -e 's/10=[0-9]\{3\}|\?$//' | \
     awk 'BEGIN{FS="";for(n=0;n<256;n++)ord[sprintf("%c",n)]=n;ord["|"]=1}{for(i=1;i<=NF;i++) a+=ord[$(i)]}END{print a%256}'
+}
+
+alias dockersha='docker images --no-trunc --quiet'  # $IMAGE
+
+
+tabulate() {
+  local file="$1"
+  local cols="${2:-2}"
+
+  if [[ ! -f "$file" ]]; then
+    echo "Error: File '$file' not found" >&2
+    return 1
+  fi
+
+  # Create paste command with multiple process substitutions
+  local paste_args=()
+  for ((i=1; i<=cols; i++)); do
+    paste_args+=("<(sed -n '${i}~${cols}p' '$file')")
+  done
+
+  # Execute the paste command and format as table
+  eval "paste ${paste_args[*]} | column -t"
 }
